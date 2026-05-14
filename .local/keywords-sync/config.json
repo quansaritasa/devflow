@@ -1,0 +1,16 @@
+{
+  "source_keywords_md": "dev/config/keywords.md",
+  "source_keywords_json": "dev/config/keywords.json",
+  "generated_keywords_md": "dev/config/keywords.md",
+  "group_order": [
+    "product-area",
+    "domain-entity",
+    "workflow",
+    "auth-access",
+    "technical",
+    "ui-ux",
+    "integration",
+    "environment",
+    "issue-shape"
+  ]
+}

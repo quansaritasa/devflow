@@ -1,0 +1,13 @@
+{
+  "task_download_path": "dev/tasks",
+  "pr_download_path": "dev/prs",
+  "sync_state_path": ".local/github-sync/sync-state.json",
+  "template_paths": [".local/github-sync/templates/pr-template.md"],
+  "default_project_key": "",
+  "repositories": [
+    "saritasa-nest/rma-mobile",
+    "saritasa-nest/rma-authentication",
+    "saritasa-nest/rma-ios",
+    "saritasa-nest/rma-backend"
+  ]
+}

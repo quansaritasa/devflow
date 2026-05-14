@@ -1,0 +1,7 @@
+{
+  "tasks_dir": "dev/tasks",
+  "index_dir": "dev/index",
+  "keywords_file": "dev/config/keywords.md",
+  "shard_size": 1000,
+  "task_key_pattern": "^[A-Z][A-Z0-9]+-\\d+$"
+}

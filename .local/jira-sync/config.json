@@ -1,0 +1,15 @@
+{
+  "download_path": "dev/tasks",
+  "sync_state_path": ".local/jira-sync/sync-state.json",
+  "not_found_state_path": ".local/jira-sync/not-found.json",
+  "template_paths": [
+    ".local/jira-sync/templates/raw-template.md",
+    "dev/templates/raw-template.md"
+  ],
+  "custom_fields": {
+    "epic_link": "customfield_10014",
+    "epic_name": "customfield_10008",
+    "story_points": "customfield_10016",
+    "sprint": "customfield_10020"
+  }
+}

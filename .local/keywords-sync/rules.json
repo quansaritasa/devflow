@@ -1,0 +1,25 @@
+{
+  "group_labels": {
+    "product-area": "Product Areas",
+    "domain-entity": "Domain Entities",
+    "workflow": "Workflow",
+    "auth-access": "Auth and Access",
+    "technical": "Technical Areas",
+    "ui-ux": "UI and UX",
+    "integration": "Integrations",
+    "environment": "Environment and Release",
+    "issue-shape": "Issue Shapes"
+  },
+  "allowed_groups": [
+    "product-area",
+    "domain-entity",
+    "workflow",
+    "auth-access",
+    "technical",
+    "ui-ux",
+    "integration",
+    "environment",
+    "issue-shape"
+  ],
+  "default_version": 1
+}

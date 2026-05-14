@@ -1,0 +1,68 @@
+{
+  "tasks": {
+    "RMASUP-1444": {
+      "last_synced_at": "2026-05-11T08:55:45.697174+00:00",
+      "last_pr_ids": []
+    },
+    "RMASUP-1445": {
+      "last_synced_at": "2026-05-11T09:00:58.905720+00:00",
+      "last_pr_ids": []
+    },
+    "RMASUP-1446": {
+      "last_synced_at": "2026-05-11T09:01:01.241639+00:00",
+      "last_pr_ids": []
+    },
+    "RMASUP-1447": {
+      "last_synced_at": "2026-05-11T09:01:03.524450+00:00",
+      "last_pr_ids": []
+    },
+    "RMASUP-1828": {
+      "last_synced_at": "2026-05-11T09:35:13.856693+00:00",
+      "last_checked_at": "2026-05-11T09:35:13.856693+00:00",
+      "last_pr_ids": [
+        "saritasa-nest/rma-authentication#820",
+        "saritasa-nest/rma-authentication#885",
+        "saritasa-nest/rma-authentication#895"
+      ],
+      "last_result": "found",
+      "not_found_count": 0,
+      "retry_after": null
+    },
+    "RMASUP-1829": {
+      "last_synced_at": "2026-05-11T09:42:55.173475+00:00",
+      "last_checked_at": "2026-05-11T09:42:55.173475+00:00",
+      "last_pr_ids": [
+        "saritasa-nest/rma-mobile#1198",
+        "saritasa-nest/rma-mobile#1199"
+      ],
+      "last_result": "found",
+      "not_found_count": 0,
+      "retry_after": null
+    },
+    "RMASUP-999999": {
+      "last_synced_at": "2026-05-11T09:32:11.700034+00:00",
+      "last_checked_at": "2026-05-11T09:32:11.700034+00:00",
+      "last_pr_ids": [],
+      "last_result": "not_found",
+      "not_found_count": 1,
+      "retry_after": "2026-05-12T09:32:11.700034+00:00"
+    },
+    "RMASUP-1830": {
+      "last_synced_at": "2026-05-11T09:35:24.156300+00:00",
+      "last_checked_at": "2026-05-11T09:35:24.156300+00:00",
+      "last_pr_ids": [
+        "saritasa-nest/rma-backend#624"
+      ],
+      "last_result": "found",
+      "not_found_count": 0,
+      "retry_after": null
+    }
+  },
+  "last_full_sync_at": "2026-05-11T09:42:55.173489+00:00",
+  "range_progress": {
+    "RMASUP": {
+      "last_task_id": 1830,
+      "updated_at": "2026-05-11T09:35:24.162247+00:00"
+    }
+  }
+}
