@@ -1,7 +1,29 @@
-# AI Session Setup
+# AI Session Startup
 
 Orchestration file for this repository.
 Read this before starting any work if available.
+
+---
+
+## Supported AI tools
+
+This file is loaded via `AGENTS.md` which is auto-read by:
+
+| Tool | Auto-reads `AGENTS.md` |
+|---|---|
+| OpenAI Codex CLI | ✅ |
+| OpenCode | ✅ |
+| GitHub Copilot (coding agent) | ✅ |
+| Claude Code | ✅ via `CLAUDE.md` symlink |
+| Gemini CLI | ✅ via `GEMINI.md` symlink |
+| Windsurf | ✅ via `.windsurfrules` symlink |
+| Codeium | ✅ via `.codeiumrules` symlink |
+| Aider | ✅ via `CONVENTIONS.md` symlink |
+| Zed | ✅ via `.rules` symlink |
+| JetBrains AI Assistant | ✅️ via `.rules` symlink |
+| Cursor | ✅ via `.cursor/rules/main.mdc` — points to `AGENTS.md` |
+
+> Edit only `AGENTS.md`. Run `sync.sh` or `sync.ps1` to propagate to all tool-specific files.
 
 ---
 
@@ -24,10 +46,9 @@ Reuse these paths. Do not guess new ones.
 
 | Step | Action |
 |---|---|
-| 1 | Read `.ai/setup.md` (this file) |
-| 2 | Read `.ai/memory.md` if it exists |
-| 3 | Read `AGENTS.md` for rules |
-| 4 | Keep all in mind for the whole session |
+| 1 | Read `.ai/memory.md` if it exists |
+| 2 | Read `AGENTS.md` for rules |
+| 3 | Keep all in mind for the whole session |
 
 If session is long, task changes, or context is fuzzy, re-read them.
 
@@ -78,7 +99,6 @@ If no skill fits, say no good skill found, then continue with memory and rules o
 
 | Check | Required |
 |---|---|
-| `.ai/setup.md` was read | yes |
 | `.ai/memory.md` was read (if exists) | yes |
 | `AGENTS.md` was read | yes |
 | `.ai/agents/` checked (if user asked for agent) | yes |
@@ -94,7 +114,7 @@ If not done yet, do it first.
 |---|---|
 | Missing file | Say it clearly. Do not pretend it exists. |
 | Optional files | Skip gracefully if not present. |
-| Required files | Stop and notify user if `AGENTS.md` or `.ai/memory.md` is missing. |
+| Required files | Stop and notify user if `AGENTS.md` is missing. |
 
 ---
 

@@ -1,0 +1,7 @@
+---
+description: Main AI rules for this repository
+alwaysApply: true
+---
+
+Follow all rules defined in `AGENTS.md` in the project root.
+If `.ai/startup.md` exists, read it before starting work.
