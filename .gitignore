@@ -1,3 +1,6 @@
+# Test project pulls
+dev/*
+
 # Environment variables
 .env
 .env.*
