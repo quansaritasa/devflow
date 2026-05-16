@@ -56,24 +56,25 @@ def save_state(sync_state_path: Path, project_key: str, max_id: int) -> None:
     _write_json_atomic(sync_state_path, data)
 
 
-def load_not_found_ids(not_found_state_path: Path, project_key: str) -> set[int]:
-    data = _load_json_object(not_found_state_path)
-    raw_ids = data.get(project_key, [])
-    if not isinstance(raw_ids, list):
+def load_not_found_ids(not_found_state_path: Path, project_key: str = "") -> set[str]:
+    """Load task keys that were not found (one per line)."""
+    if not not_found_state_path.is_file():
         return set()
-    return {int(value) for value in raw_ids if str(value).isdigit()}
+    return {
+        line.strip()
+        for line in not_found_state_path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
 
 
 def add_not_found_id(
     not_found_state_path: Path, project_key: str, issue_id: int
 ) -> None:
-    data = _load_json_object(not_found_state_path)
-    existing = data.get(project_key, [])
-    issue_ids = (
-        {int(value) for value in existing if str(value).isdigit()}
-        if isinstance(existing, list)
-        else set()
-    )
-    issue_ids.add(issue_id)
-    data[project_key] = sorted(issue_ids)
-    _write_json_atomic(not_found_state_path, data)
+    """Append a task key to the not-found list."""
+    not_found_state_path.parent.mkdir(parents=True, exist_ok=True)
+    key = f"{project_key}-{issue_id}"
+    existing = load_not_found_ids(not_found_state_path)
+    if key in existing:
+        return
+    with not_found_state_path.open("a", encoding="utf-8") as handle:
+        handle.write(f"{key}\n")

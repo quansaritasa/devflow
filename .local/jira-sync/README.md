@@ -2,129 +2,129 @@
 
 Download Jira issues into a configured local task folder as LLM-friendly task files.
 
-## Configuration
+---
 
-Runtime settings live in:
+## 1. Configuration
 
-- `.local/jira-sync/config.json`
+Runtime settings in `.local/jira-sync/config.json`, secrets in `.local/jira-sync/.env`.
 
-Environment secrets and connection settings live in:
+### config.json
 
-- `.local/jira-sync/.env`
-
-## Config file
-
-Example `config.json` keys:
-
-```/dev/null/config.json#L1-16
+```json
 {
   "download_path": "dev/tasks",
   "sync_state_path": ".local/jira-sync/sync-state.json",
+  "not_found_state_path": ".local/jira-sync/result/tasks-not-found.txt",
+  "pending_tasks_path": ".local/jira-sync/result/tasks-pending.txt",
   "template_paths": [
     ".local/jira-sync/templates/raw-template.md",
     "dev/templates/raw-template.md"
   ],
   "custom_fields": {
-    "epic_link": "customfield_xxxxx",
-    "epic_name": "customfield_xxxxx",
-    "story_points": "customfield_xxxxx",
-    "sprint": "customfield_xxxxx"
+    "story_points": "customfield_12722",
+    "sprint": "customfield_10006",
+    "tags": "customfield_13351"
   }
 }
 ```
 
-You can change paths and Jira custom field IDs there without editing Python source.
+### .env
 
-## Env file
-
-A placeholder `.local/jira-sync/.env` file is checked into this worktree. Replace the placeholder values with your local Jira connection settings before running the sync.
-
-```/dev/null/.env#L1-5
+```
 JIRA_URL=https://your-org.atlassian.net
 JIRA_EMAIL=you@example.com
-JIRA_API_TOKEN=replace-with-your-jira-api-token
+JIRA_API_TOKEN=your-api-token
 JIRA_PROJECT_KEY=YOURPROJECT
 HTTP_TIMEOUT_SECONDS=30
 ```
 
-## Usage
+### Discover custom fields
 
-### Resume or range sync
-
-```/dev/null/usage.txt#L1-4
-python main.py
-python main.py --force
-python main.py --start 100
-python main.py --force --start 100
+```bash
+python main.py --discover       # show key fields + all others
+python main.py --discover-all   # show all 85+ fields flat
 ```
 
-### Download a single task
+Copy the output field IDs into `config.json` `custom_fields`.
 
-If you pass a positional target and do not pass `--start`, the script downloads only that one issue.
+---
 
-```/dev/null/single-task.txt#L1-4
-python main.py YOURPROJECT-2100
-python main.py 2100
-python main.py --force YOURPROJECT-2100
-python main.py --force 2100
+## 2. Usage
+
+### Single task
+
+```bash
+python main.py RMASUP-2100
+python main.py 2100              # uses JIRA_PROJECT_KEY
+python main.py --force 2100      # overwrite existing
 ```
 
-Behavior:
+Only tasks matching `JIRA_PROJECT_KEY` are allowed. Wrong-project keys are rejected.
 
-- `YOURPROJECT-2100` uses the project key from the provided issue key
-- `2100` uses `JIRA_PROJECT_KEY` from `.local/jira-sync/.env`
-- single-task mode writes `raw.md` and `task.json`
-- single-task mode does not advance resume sync state
+### Range sync
 
-## Output
+```bash
+python main.py                   # resume from last synced ID
+python main.py --force           # force overwrite all
+python main.py --start 100       # start from ID 100
+```
 
-The script writes:
+Epics automatically fetch children via `parent=` JQL and list them as subtasks.
 
-- `[KEY]/raw.md` files under the configured `download_path`
-- `[KEY]/task.json` files under the configured `download_path`
-- sync state at the configured `sync_state_path`
+### Pending tasks
 
-## Features
+```bash
+python main.py --get-pending     # scan dev/tasks for unresolved → tasks-pending.txt
+python main.py --pending         # re-sync all pending, remove resolved ones
+```
 
-- Resumes from the last successful issue ID using the configured sync state file.
-- Skips deleted or missing issue numbers automatically.
-- Reuses `.local/jira-sync/not-found.json` to avoid re-fetching issue IDs already known to be missing and prints a skip message instead.
-- Uses Jira Cloud `POST /rest/api/3/search/jql` for max issue lookup.
-- Writes rich `raw.md` task files.
-- Writes structured `task.json` files.
-- Includes estimated and spent time from Jira timetracking.
-- Supports configurable Jira custom fields for epic link, epic name, story points, and sprint.
+Resolved statuses: Done, Completed, Resolved, Closed, Accepted, Canceled.
 
-## raw.md contents
+---
 
-Each task includes:
+## 3. Result files
 
-- status, type, priority
-- estimated time and spent time
-- assignee, reporter, components, labels, fix versions
-- created/updated/due/resolution fields
-- epic, sprint, parent, story points, subtasks
-- related tasks
-- attachments
-- technical signals
-- acceptance clues
-- description and comments
+All in `.local/jira-sync/result/`, one task key per line (`RMASUP-xxxx` format):
 
-## task.json contents
+| File | Purpose |
+|------|---------|
+| `tasks-pending.txt` | Unresolved tasks for `--pending` re-sync |
+| `tasks-not-found.txt` | Task IDs that don't exist -- auto-skipped |
+| `tasks-not-sync.txt` | Task IDs to never sync (range + pending) |
+| `tasks-force-sync.txt` | Task IDs to always force-overwrite (range only) |
 
-Each task also includes a structured JSON representation with fields such as:
+---
 
-- task key and summary
-- estimated and spent time
-- status, type, priority
-- assignee, reporter, labels, components, fix versions
-- epic, sprint, parent, subtasks
-- related tasks
-- attachments
-- comments
-- local file paths for `raw.md` and `task.json`
+## 4. Output
 
-## Notes
+### raw.md
 
-- The app is intentionally task-scoped and does not write aggregate index files.
-- Best practice: keep rich human-readable content in `raw.md` and structured task metadata in `task.json`.
+- Status, type, priority, timetracking, assignee, reporter
+- Labels, tags (hyperlinked to Jira search), fix versions
+- Dates, resolution, URL
+- Epic, sprint, parent, story points (all hyperlinked)
+- Subtasks (sub-list, hyperlinked, sorted ASC by summary)
+- Related tasks (hyperlinked)
+- Attachments
+- Description and comments (plain text in ``` blocks, HTML stripped)
+
+### task.json
+
+Structured JSON with all fields above plus:
+
+- `estimated_seconds`, `spent_seconds`
+- `description_text` (HTML stripped)
+- `comments[].body_text` (HTML stripped)
+- `related_tasks` array with relation types and sources
+- `tags` array (like `labels`)
+- `paths.raw`, `paths.task_json`
+
+---
+
+## 5. Notes
+
+- Only tasks from the configured `JIRA_PROJECT_KEY` are synced.
+- Epic children are fetched via `parent=` JQL, only if `fields.subtasks` is empty.
+- `story_points` field: use `Story point estimate` from `--discover`.
+- `sprint` field: use `Sprint` from `--discover` (not `customfield_10020` -- that was wrong).
+- Single-task mode does not advance resume sync state.

@@ -17,6 +17,7 @@ def write_task_json(
     force: bool = False,
     download_path: str = DOWNLOAD_PATH,
     download_path_rel: str = DOWNLOAD_PATH_REL,
+    epic_children: list[dict[str, object]] | None = None,
 ) -> str:
     key = str(issue.get("key", ""))
     folder = os.path.join(download_path, key)
@@ -25,7 +26,7 @@ def write_task_json(
     existed = os.path.exists(path)
     if existed and not force:
         return "skipped"
-    content = build_task_json_record(issue, download_path_rel)
+    content = build_task_json_record(issue, download_path_rel, epic_children)
     _write_text_atomic(
         path,
         json.dumps(content, ensure_ascii=False, indent=2) + "\n",
@@ -34,7 +35,10 @@ def write_task_json(
 
 
 def write_raw_md(
-    issue: dict[str, object], force: bool = False, download_path: str = DOWNLOAD_PATH
+    issue: dict[str, object],
+    force: bool = False,
+    download_path: str = DOWNLOAD_PATH,
+    epic_children: list[dict[str, object]] | None = None,
 ) -> str:
     key = str(issue.get("key", ""))
     folder = os.path.join(download_path, key)
@@ -43,6 +47,6 @@ def write_raw_md(
     existed = os.path.exists(path)
     if existed and not force:
         return "skipped"
-    content = render_raw_md(issue)
+    content = render_raw_md(issue, epic_children)
     _write_text_atomic(path, content)
     return "overwritten" if existed else "created"

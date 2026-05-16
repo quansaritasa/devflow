@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+- Epic children fetching via `parent=` JQL in range sync and single-task mode.
+- `--discover` / `--discover-all` flags to find Jira custom field IDs.
+- `--get-pending` to scan local tasks and build pending list.
+- `--pending` to re-sync unresolved tasks, auto-remove resolved ones.
+- Tags custom field (`customfield_13351`) with hyperlinks to Jira search.
+- `result/tasks-pending.txt`, `result/tasks-not-found.txt`, `result/tasks-not-sync.txt`, `result/tasks-force-sync.txt` for tracking.
+- Project key guard — rejects tasks from non-configured projects.
+- Hyperlinks on Epic, Parent, Related Tasks, and Subtasks in raw.md.
+- Subtasks now sub-listed, sorted ASC by summary.
+- `story_points` and `tags` arrays in task.json.
+
+### Changed
+- Custom field IDs discovered and corrected via `--discover`:
+  - `sprint`: `customfield_10020` → `customfield_10006`
+  - `story_points`: `customfield_10016` → `customfield_12722`
+  - `epic_link`, `epic_name` removed — replaced by `parent` field.
+- Description and comments: HTML stripped, plain text in ``` blocks.
+- `not-found.json` → `result/tasks-not-found.txt` (plain text, full keys).
+- `pending-tasks.txt` → `result/tasks-pending.txt`.
+- All result files use `RMASUP-xxxx` full-key format.
+- Resolved statuses include `Canceled`.
+- Functions refactored to reduce length (`build_task_relationships`, `discover_fields`, `main()`).
+
+### Removed
+- `epic_link` and `epic_name` custom fields — replaced by standard `parent` field.
+- Technical Signals and Acceptance Clues sections from raw.md.
+
+---
+
 ## 0.1.0
 
 ### Improved

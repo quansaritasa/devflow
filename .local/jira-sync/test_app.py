@@ -105,15 +105,17 @@ class SyncStateTests(unittest.TestCase):
 
     def test_not_found_ids_are_deduplicated_and_sorted(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            not_found_path = Path(temp_dir) / "nested" / "not-found.json"
+            not_found_path = Path(temp_dir) / "nested" / "tasks-not-found.txt"
 
             add_not_found_id(not_found_path, "APP", 7)
             add_not_found_id(not_found_path, "APP", 3)
             add_not_found_id(not_found_path, "APP", 7)
 
-            self.assertEqual(load_not_found_ids(not_found_path, "APP"), {3, 7})
-            data = json.loads(not_found_path.read_text(encoding="utf-8"))
-            self.assertEqual(data["APP"], [3, 7])
+            ids = load_not_found_ids(not_found_path, "APP")
+            self.assertEqual(ids, {"APP-7", "APP-3"})
+            content = not_found_path.read_text(encoding="utf-8")
+            self.assertIn("APP-3", content)
+            self.assertIn("APP-7", content)
 
 
 class WriterTests(unittest.TestCase):
@@ -249,17 +251,14 @@ class MainTests(unittest.TestCase):
                 ),
                 patch("main.get_max_issue_id", return_value=3),
                 patch("main.fetch_issue") as fetch_issue_mock,
-                patch("main.load_not_found_ids", return_value={3}),
+                patch("main.load_not_found_ids", return_value={"APP-3"}),
                 redirect_stdout(stdout),
             ):
                 main()
 
             output = stdout.getvalue()
             self.assertEqual(fetch_issue_mock.call_count, 2)
-            self.assertIn(
-                "APP-3: known missing from not-found state - skip Jira fetch",
-                output,
-            )
+            self.assertIn("APP-3: known missing - skip", output)
             self.assertIn("Not found:   1", output)
 
 

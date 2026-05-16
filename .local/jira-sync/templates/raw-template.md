@@ -9,6 +9,7 @@
 - **Reporter:** [REPORTER]
 - **Components:** [COMPONENTS]
 - **Labels:** [LABELS]
+- **Tags:** [TAGS]
 - **Fix Versions:** [FIX_VERSIONS]
 - **Created:** [CREATED]
 - **Updated:** [UPDATED]
@@ -25,8 +26,7 @@
 - **Sprint:** [SPRINT]
 - **Parent:** [PARENT]
 - **Story Points:** [STORY_POINTS]
-- **Subtasks:**
-[SUBTASKS]
+- **Subtasks:** [SUBTASKS]
 
 ---
 
@@ -41,16 +41,6 @@
 [ATTACHMENTS]
 
 ---
-
-## Technical Signals
-
-[TECH_SIGNALS]
-
----
-
-## Acceptance Clues
-
-[ACCEPTANCE_CLUES]
 
 ---
 

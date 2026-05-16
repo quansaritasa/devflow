@@ -15,8 +15,6 @@ CONFIG_PATH = BASE_DIR / "config.json"
 load_dotenv(BASE_DIR / ".env")
 
 
-
-
 @dataclass(frozen=True)
 class AppConfig:
     download_path: Path
@@ -24,6 +22,7 @@ class AppConfig:
     not_found_state_path: Path
     template_paths: list[Path]
     custom_fields: dict[str, str]
+    pending_tasks_path: Path
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -78,6 +77,13 @@ def load_app_config(config_path: Path = CONFIG_PATH) -> AppConfig:
             for key, value in custom_fields.items()
             if str(key).strip() and str(value).strip()
         },
+        pending_tasks_path=_resolve_repo_path(
+            str(
+                raw.get("pending_tasks_path", "")
+                or ".local/jira-sync/result/tasks-pending.txt"
+            ),
+            "pending_tasks_path",
+        ),
     )
 
 
@@ -106,10 +112,10 @@ DOWNLOAD_PATH_REL = APP_CONFIG.download_path.relative_to(REPO_ROOT).as_posix()
 SYNC_STATE_PATH = APP_CONFIG.sync_state_path
 NOT_FOUND_STATE_PATH = APP_CONFIG.not_found_state_path
 TEMPLATE_PATHS = APP_CONFIG.template_paths
-EPIC_LINK_FIELD = APP_CONFIG.custom_fields.get("epic_link", "")
-EPIC_NAME_FIELD = APP_CONFIG.custom_fields.get("epic_name", "")
+PENDING_TASKS_PATH = APP_CONFIG.pending_tasks_path
 STORY_POINTS_FIELD = APP_CONFIG.custom_fields.get("story_points", "")
 SPRINT_FIELD = APP_CONFIG.custom_fields.get("sprint", "")
+TAGS_FIELD = APP_CONFIG.custom_fields.get("tags", "")
 
 JIRA_FIELDS = [
     "summary",
@@ -136,11 +142,20 @@ JIRA_FIELDS = [
     *[
         field_name
         for field_name in [
-            EPIC_LINK_FIELD,
-            EPIC_NAME_FIELD,
             STORY_POINTS_FIELD,
             SPRINT_FIELD,
+            TAGS_FIELD,
         ]
         if field_name
     ],
 ]
+
+
+def validate_project_key(project_key: str) -> None:
+    """Raise ValueError if project_key does not match the configured JIRA_PROJECT_KEY."""
+    if project_key != JIRA_PROJECT_KEY:
+        raise ValueError(
+            f"Project key '{project_key}' does not match configured"
+            f" project '{JIRA_PROJECT_KEY}'. Only tasks in"
+            f" '{JIRA_PROJECT_KEY}' can be downloaded."
+        )

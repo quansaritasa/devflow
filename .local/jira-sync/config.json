@@ -1,15 +1,15 @@
 {
   "download_path": "dev/tasks",
   "sync_state_path": ".local/jira-sync/sync-state.json",
-  "not_found_state_path": ".local/jira-sync/not-found.json",
+  "not_found_state_path": ".local/jira-sync/result/tasks-not-found.txt",
   "template_paths": [
     ".local/jira-sync/templates/raw-template.md",
     "dev/templates/raw-template.md"
   ],
   "custom_fields": {
-    "epic_link": "customfield_10014",
-    "epic_name": "customfield_10008",
-    "story_points": "customfield_10016",
-    "sprint": "customfield_10020"
-  }
+    "story_points": "customfield_12722",
+    "sprint": "customfield_10006",
+    "tags": "customfield_13351"
+  },
+  "pending_tasks_path": ".local/jira-sync/result/tasks-pending.txt"
 }

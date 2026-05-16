@@ -14,9 +14,9 @@
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-logs/
+# Python
+__pycache__/
+*/__pycache__/*
 
 # Logs
 logs

@@ -3,12 +3,11 @@ import re
 from config import (
     DOWNLOAD_PATH,
     DOWNLOAD_PATH_REL,
-    EPIC_LINK_FIELD,
-    EPIC_NAME_FIELD,
     JIRA_PROJECT_KEY,
     JIRA_URL,
     SPRINT_FIELD,
     STORY_POINTS_FIELD,
+    TAGS_FIELD,
     TEMPLATE_PATHS,
 )
 
@@ -181,28 +180,37 @@ def _extract_sprint(fields):
     return _text(sprint_field)
 
 
+def _extract_tags(fields):
+    """Extract tags from the configured tags custom field as markdown links."""
+    raw = fields.get(TAGS_FIELD) or []
+    if not raw:
+        return "None"
+    field_num = TAGS_FIELD.replace("customfield_", "")
+    parts = []
+    for v in raw:
+        v_str = str(v)
+        encoded = v_str.replace(" ", "%20")
+        url = f"{JIRA_URL}/issues/?jql=cf%5B{field_num}%5D%20%3D%20%22{encoded}%22"
+        parts.append(f"[{v_str}]({url})")
+    return ", ".join(parts)
+
+
 def _build_epic(fields):
     parent = fields.get("parent")
-    if parent:
-        ptype = ((parent.get("fields") or {}).get("issuetype") or {}).get("name", "")
-        if ptype.lower() == "epic":
-            key = str(parent.get("key") or "").strip()
-            summary = str(((parent.get("fields") or {}).get("summary") or "")).strip()
-            if key:
-                return {
-                    "key": key,
-                    "summary": summary,
-                    "url": f"{JIRA_URL}/browse/{key}",
-                }
-    epic_key = str(fields.get(EPIC_LINK_FIELD) or "").strip()
-    epic_name = str(fields.get(EPIC_NAME_FIELD) or "").strip()
-    if epic_key:
-        return {
-            "key": epic_key,
-            "summary": epic_name,
-            "url": f"{JIRA_URL}/browse/{epic_key}",
-        }
-    return None
+    if not parent:
+        return None
+    ptype = ((parent.get("fields") or {}).get("issuetype") or {}).get("name", "")
+    if ptype.lower() != "epic":
+        return None
+    key = str(parent.get("key") or "").strip()
+    if not key:
+        return None
+    summary = str(((parent.get("fields") or {}).get("summary") or "")).strip()
+    return {
+        "key": key,
+        "summary": summary,
+        "url": f"{JIRA_URL}/browse/{key}",
+    }
 
 
 def _extract_epic(fields):
@@ -210,7 +218,8 @@ def _extract_epic(fields):
     if not epic:
         return "None"
     summary = str(epic.get("summary") or "").strip()
-    return f"{epic['key']} — {summary}" if summary else str(epic["key"])
+    link = f"[{epic['key']}]({epic['url']})"
+    return f"{link} — {summary}" if summary else link
 
 
 def _build_parent(fields):
@@ -237,12 +246,13 @@ def _extract_parent(fields):
     if not parent:
         return "None"
     issue_type = str(parent.get("issue_type") or "").strip()
+    link = f"[{parent['key']}]({parent['url']})"
     if issue_type:
-        return f"{parent['key']} — {parent['summary']} ({issue_type})"
-    return f"{parent['key']} — {parent['summary']}"
+        return f"{link} — {parent['summary']} ({issue_type})"
+    return f"{link} — {parent['summary']}"
 
 
-def _build_subtasks(fields):
+def _build_subtasks(fields, epic_children: list[dict[str, object]] | None = None):
     subtasks = fields.get("subtasks") or []
     items = []
     for s in subtasks:
@@ -264,17 +274,41 @@ def _build_subtasks(fields):
                 "url": f"{JIRA_URL}/browse/{key}",
             }
         )
+    if epic_children:
+        for child in epic_children:
+            child_key = str(child.get("key") or "").strip()
+            if not child_key:
+                continue
+            child_fields = child.get("fields") or {}
+            items.append(
+                {
+                    "key": child_key,
+                    "summary": str(child_fields.get("summary") or "").strip(),
+                    "status": str(
+                        ((child_fields.get("status") or {}).get("name") or "")
+                    ).strip(),
+                    "issue_type": str(
+                        ((child_fields.get("issuetype") or {}).get("name") or "")
+                    ).strip()
+                    or None,
+                    "url": f"{JIRA_URL}/browse/{child_key}",
+                }
+            )
     return items
 
 
-def _extract_subtasks(fields):
-    subtasks = _build_subtasks(fields)
+def _extract_subtasks(fields, epic_children: list[dict[str, object]] | None = None):
+    subtasks = _build_subtasks(fields, epic_children)
     if not subtasks:
-        return "- None"
+        return "None"
+    subtasks = sorted(subtasks, key=lambda s: s["summary"].lower())
     lines = []
     for subtask in subtasks:
-        lines.append(f"- {subtask['key']}: {subtask['summary']} [{subtask['status']}]")
-    return "\n".join(lines)
+        lines.append(
+            f"  - [{subtask['key']}]({subtask['url']}):"
+            f" {subtask['summary']} [{subtask['status']}]"
+        )
+    return "\n" + "\n".join(lines)
 
 
 def _extract_related_tasks(fields):
@@ -299,7 +333,9 @@ def _extract_related_tasks(fields):
         status = (
             ((issue.get("fields") or {}).get("status") or {}).get("name") or ""
         ).strip()
-        lines.append(f"- **{direction}** {key}: {summary} [{status}]")
+        lines.append(
+            f"- **{direction}** [{key}]({JIRA_URL}/browse/{key}): {summary} [{status}]"
+        )
     return "\n".join(lines) if lines else "_(none)_"
 
 
@@ -350,114 +386,6 @@ def _extract_attachments(fields):
     return "\n".join(lines)
 
 
-def _collect_text_blob(issue):
-    fields = issue.get("fields") or {}
-    rendered = issue.get("renderedFields") or {}
-    parts = [
-        _text((fields.get("summary") or ""), default=""),
-        _text(
-            (rendered.get("description") or fields.get("description") or ""), default=""
-        ),
-    ]
-    raw_comments = (fields.get("comment") or {}).get("comments", [])
-    rendered_comments = (rendered.get("comment") or {}).get("comments", [])
-    for i, c in enumerate(raw_comments):
-        rendered_body = (
-            rendered_comments[i].get("body", "") if i < len(rendered_comments) else ""
-        )
-        parts.append(_text(rendered_body or c.get("body", ""), default=""))
-    return "\n".join([p for p in parts if p]).lower()
-
-
-def _extract_tech_signals(issue):
-    blob = _collect_text_blob(issue)
-    groups = {
-        "API": ["api", "endpoint", "swagger", "graphql", "rest"],
-        "Backend": ["backend", "service", "controller", "repository", "job", "worker"],
-        "Frontend": [
-            "frontend",
-            "ui",
-            "ux",
-            "component",
-            "page",
-            "screen",
-            "react",
-            "angular",
-            ".net",
-            "blazor",
-        ],
-        "Database": [
-            "sql",
-            "database",
-            "db",
-            "migration",
-            "query",
-            "table",
-            "stored procedure",
-        ],
-        "Testing": ["unit test", "integration test", "automation", "test case", "qa"],
-        "Performance": ["performance", "slow", "latency", "optimize", "memory", "cpu"],
-        "Security": [
-            "auth",
-            "oauth",
-            "permission",
-            "security",
-            "xss",
-            "csrf",
-            "encryption",
-        ],
-    }
-    hits = [name for name, kws in groups.items() if any(k in blob for k in kws)]
-    if not hits:
-        return "- None"
-    return "\n".join(f"- {h}" for h in hits)
-
-
-def _extract_acceptance_clues(issue):
-    fields = issue.get("fields") or {}
-    rendered = issue.get("renderedFields") or {}
-    parts = [
-        _normalize_jira_text(
-            rendered.get("description") or fields.get("description") or ""
-        )
-    ]
-    raw_comments = (fields.get("comment") or {}).get("comments") or []
-    rendered_comments = (rendered.get("comment") or {}).get("comments") or []
-    for i, c in enumerate(raw_comments[:10]):
-        rendered_body = (
-            rendered_comments[i].get("body", "") if i < len(rendered_comments) else ""
-        )
-        parts.append(_normalize_jira_text(rendered_body or c.get("body") or ""))
-    text = "\n".join(p for p in parts if p)
-    lines = []
-    for raw in re.split(r"\n+", text):
-        s = re.sub(r"<[^>]+>", " ", raw).strip(" -•\t")
-        s_low = s.lower()
-        if not s:
-            continue
-        if any(
-            token in s_low
-            for token in [
-                "accept",
-                "should",
-                "must",
-                "expected",
-                "verify",
-                "test",
-                "given",
-                "when",
-                "then",
-            ]
-        ):
-            if s not in lines:
-                lines.append(s)
-        if len(lines) >= 12:
-            break
-    if not lines:
-        return "- None"
-    return "\n".join(f"- {x}" for x in lines)
-
-
 def _html_to_text(value: str) -> str:
     text = re.sub(r"<br\s*/?>", "\n", value, flags=re.IGNORECASE)
     text = re.sub(r"</p\s*>", "\n", text, flags=re.IGNORECASE)
@@ -487,12 +415,19 @@ def _extract_comments(issue):
             body = rendered_comments[i].get("body", "")
         if not body:
             body = c.get("body") or ""
-        body = _normalize_jira_text(body).strip() or "_(empty comment)_"
+        body = _normalize_jira_text(body).strip()
+        if body:
+            body_text = _html_to_text(body)
+            body = f"```\n{body_text}\n```"
+        else:
+            body = "_(empty comment)_"
         lines.append(f"**{author}** ({created}):\n{body}")
     return "\n\n---\n\n".join(lines)
 
 
-def render_raw_md(issue: dict[str, object]) -> str:
+def render_raw_md(
+    issue: dict[str, object], epic_children: list[dict[str, object]] | None = None
+) -> str:
     fields = issue.get("fields") or {}
     rendered = issue.get("renderedFields") or {}
     key = issue.get("key", "")
@@ -509,6 +444,7 @@ def render_raw_md(issue: dict[str, object]) -> str:
         else "None"
     )
     fix_versions = _join_names(fields.get("fixVersions") or [])
+    tags = _extract_tags(fields)
     created = _text(str(fields.get("created") or "")[:10])
     updated = _text(str(fields.get("updated") or "")[:10])
     due_date = _text(fields.get("duedate"))
@@ -516,9 +452,12 @@ def render_raw_md(issue: dict[str, object]) -> str:
     resolution_date = _text(str(fields.get("resolutiondate") or "")[:10])
     story_points = fields.get(STORY_POINTS_FIELD)
     story_points = "None" if story_points in (None, "") else str(story_points)
-    description = (
-        rendered.get("description") or fields.get("description") or "_(no description)_"
-    )
+    description_html = rendered.get("description") or fields.get("description") or ""
+    if description_html:
+        description_text = _html_to_text(description_html)
+        description = f"```\n{description_text}\n```"
+    else:
+        description = "_(no description)_"
     tt = _extract_timetracking(fields)
     template = load_template()
     return (
@@ -533,6 +472,7 @@ def render_raw_md(issue: dict[str, object]) -> str:
         .replace("[REPORTER]", reporter)
         .replace("[COMPONENTS]", components)
         .replace("[LABELS]", labels)
+        .replace("[TAGS]", tags)
         .replace("[FIX_VERSIONS]", fix_versions)
         .replace("[CREATED]", created)
         .replace("[UPDATED]", updated)
@@ -544,14 +484,41 @@ def render_raw_md(issue: dict[str, object]) -> str:
         .replace("[SPRINT]", _extract_sprint(fields))
         .replace("[PARENT]", _extract_parent(fields))
         .replace("[STORY_POINTS]", story_points)
-        .replace("[SUBTASKS]", _extract_subtasks(fields))
+        .replace("[SUBTASKS]", _extract_subtasks(fields, epic_children))
         .replace("[RELATED_TASKS]", _extract_related_tasks(fields))
         .replace("[ATTACHMENTS]", _extract_attachments(fields))
-        .replace("[TECH_SIGNALS]", _extract_tech_signals(issue))
-        .replace("[ACCEPTANCE_CLUES]", _extract_acceptance_clues(issue))
         .replace("[DESCRIPTION]", str(description))
         .replace("[COMMENTS]", _extract_comments(issue))
     )
+
+
+def _add_issue_link_relations(fields, add_relation):
+    for link in fields.get("issuelinks") or []:
+        link_type = link.get("type") or {}
+        if "inwardIssue" in link:
+            issue2 = link.get("inwardIssue")
+            rel = link_type.get("inward") or link_type.get("name") or "related"
+        elif "outwardIssue" in link:
+            issue2 = link.get("outwardIssue")
+            rel = link_type.get("outward") or link_type.get("name") or "related"
+        else:
+            continue
+        if not isinstance(issue2, dict):
+            continue
+        issue2_fields = issue2.get("fields") or {}
+        add_relation(
+            issue2.get("key"),
+            rel,
+            "issue_link",
+            (issue2_fields.get("summary") or ""),
+            ((issue2_fields.get("status") or {}).get("name") or ""),
+            ((issue2_fields.get("issuetype") or {}).get("name") or ""),
+        )
+
+
+def _extract_mentions(text, task_key_re, add_relation, source):
+    for mentioned in sorted(set(task_key_re.findall(text))):
+        add_relation(mentioned, "mentioned", source)
 
 
 def build_task_relationships(
@@ -596,27 +563,7 @@ def build_task_relationships(
             }
         )
 
-    for link in fields.get("issuelinks") or []:
-        link_type = link.get("type") or {}
-        if "inwardIssue" in link:
-            issue2 = link.get("inwardIssue")
-            rel = link_type.get("inward") or link_type.get("name") or "related"
-        elif "outwardIssue" in link:
-            issue2 = link.get("outwardIssue")
-            rel = link_type.get("outward") or link_type.get("name") or "related"
-        else:
-            continue
-        if not isinstance(issue2, dict):
-            continue
-        issue2_fields = issue2.get("fields") or {}
-        add_relation(
-            issue2.get("key"),
-            rel,
-            "issue_link",
-            (issue2_fields.get("summary") or ""),
-            ((issue2_fields.get("status") or {}).get("name") or ""),
-            ((issue2_fields.get("issuetype") or {}).get("name") or ""),
-        )
+    _add_issue_link_relations(fields, add_relation)
 
     parent = fields.get("parent") or {}
     if parent.get("key"):
@@ -634,21 +581,10 @@ def build_task_relationships(
             ((parent_fields.get("issuetype") or {}).get("name") or ""),
         )
 
-    epic_key = fields.get(EPIC_LINK_FIELD)
-    if epic_key:
-        add_relation(
-            str(epic_key),
-            "epic",
-            "epic_link_field",
-            _text(fields.get(EPIC_NAME_FIELD), ""),
-            issue_type_text="Epic",
-        )
-
     desc = _normalize_jira_text(
         rendered.get("description") or fields.get("description") or ""
     )
-    for mentioned in sorted(set(task_key_re.findall(desc))):
-        add_relation(mentioned, "mentioned", "description")
+    _extract_mentions(desc, task_key_re, add_relation, "description")
 
     comments = (fields.get("comment") or {}).get("comments") or []
     rendered_comments = (rendered.get("comment") or {}).get("comments") or []
@@ -657,8 +593,7 @@ def build_task_relationships(
             rendered_comments[i].get("body", "") if i < len(rendered_comments) else ""
         )
         body = _normalize_jira_text(rendered_body or c.get("body") or "")
-        for mentioned in sorted(set(task_key_re.findall(body))):
-            add_relation(mentioned, "mentioned", "comment")
+        _extract_mentions(body, task_key_re, add_relation, "comment")
 
     return {
         "task_key": key,
@@ -673,7 +608,9 @@ def build_task_relationships(
 
 
 def build_task_json_record(
-    issue: dict[str, object], download_path_rel: str = DOWNLOAD_PATH_REL
+    issue: dict[str, object],
+    download_path_rel: str = DOWNLOAD_PATH_REL,
+    epic_children: list[dict[str, object]] | None = None,
 ) -> dict[str, object]:
     fields = issue.get("fields") or {}
     rendered = issue.get("renderedFields") or {}
@@ -718,11 +655,13 @@ def build_task_json_record(
     component_names = _split_names(_join_names(fields.get("components") or []))
     epic = _build_epic(fields)
     parent = _build_parent(fields)
-    subtasks = _build_subtasks(fields)
+    subtasks = _build_subtasks(fields, epic_children)
     attachments = _build_attachments(fields)
     labels = [
         str(label) for label in (fields.get("labels") or []) if str(label).strip()
     ]
+    tags_raw = fields.get(TAGS_FIELD) or []
+    tags_json = [str(v) for v in tags_raw] if tags_raw else None
 
     return {
         "task_key": key,
@@ -754,6 +693,7 @@ def build_task_json_record(
         "story_points": None
         if fields.get(STORY_POINTS_FIELD) in (None, "")
         else fields.get(STORY_POINTS_FIELD),
+        "tags": tags_json,
         "description": description_html,
         "description_text": description_text,
         "comments": comments,
