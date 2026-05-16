@@ -10,20 +10,15 @@ from typing import cast
 from config import (
     CONFIG_PATH,
     JIRA_PROJECT_KEY,
-    PENDING_TASKS_PATH,
     REPO_ROOT,
     load_app_config,
     validate_project_key,
 )
-from fetcher import (
-    discover_fields,
-    fetch_children,
-    fetch_issue,
-    get_max_issue_id,
-    should_fetch_children,
-)
+from fetcher import discover_fields, fetch_issue, get_max_issue_id
 from persistence import write_raw_md, write_task_json
-from sync_state import add_not_found_id, load_not_found_ids, load_state, save_state
+from sync_runner import _fetch_children_if_epic, range_sync_issue, sync_one_issue
+from sync_state import add_not_found_id, load_not_found_ids, load_state
+from task_lists import RESOLVED_STATUSES, TaskListManager
 
 ISSUE_KEY_PATTERN = re.compile(r"^(?P<project>[A-Z][A-Z0-9]+)-(?P<issue_id>\d+)$")
 
@@ -78,7 +73,7 @@ def parse_args() -> argparse.Namespace:
     _ = parser.add_argument(
         "--discover",
         action="store_true",
-        help="Discover key custom fields (epic, sprint, story points, tags) from Jira.",
+        help="Discover key custom fields from Jira.",
     )
     _ = parser.add_argument(
         "--discover-all",
@@ -88,290 +83,14 @@ def parse_args() -> argparse.Namespace:
     _ = parser.add_argument(
         "--get-pending",
         action="store_true",
-        help="Scan /dev/tasks for unresolved tasks and write to pending-tasks.txt.",
+        help="Scan dev/tasks for unresolved tasks and write to tasks-pending.txt.",
     )
     _ = parser.add_argument(
         "--pending",
         action="store_true",
-        help="Re-sync all tasks in pending-tasks.txt, remove resolved ones.",
+        help="Re-sync all tasks in tasks-pending.txt, remove resolved ones.",
     )
     return parser.parse_args()
-
-
-def sync_one_issue(
-    project_key: str,
-    issue_id: int,
-    force: bool,
-    download_path: str,
-    download_path_rel: str,
-    not_found_state_path: Path,
-) -> int:
-    key = f"{project_key}-{issue_id}"
-    print(f"Project:       {project_key}")
-    print(f"Download path: {download_path}")
-    print(f"Target:        {key}")
-    print(f"Mode:          {'force overwrite' if force else 'skip existing'}")
-    print()
-
-    try:
-        issue = fetch_issue(project_key, issue_id)
-        if issue is None:
-            add_not_found_id(not_found_state_path, project_key, issue_id)
-            print(
-                f"  {key}: not found (deleted or never existed) - added to skipped list"
-            )
-            print()
-            print("--- Done ---")
-            print("Created:     0")
-            print("Overwritten: 0")
-            print("Skipped:     0")
-            print("Not found:   1")
-            print("Errors:      0")
-            return 0
-
-        children = _fetch_children(issue)
-
-        result = write_raw_md(
-            issue, force=force, download_path=download_path, epic_children=children
-        )
-        _ = write_task_json(
-            issue,
-            force=force,
-            download_path=download_path,
-            download_path_rel=download_path_rel,
-            epic_children=children,
-        )
-
-        created = int(result == "created")
-        overwritten = int(result == "overwritten")
-        skipped = int(result == "skipped")
-
-        if children:
-            print(f"  {key}: {result} (with {len(children)} children)")
-        else:
-            print(f"  {key}: {result}")
-        print()
-        print("--- Done ---")
-        print(f"Created:     {created}")
-        print(f"Overwritten: {overwritten}")
-        print(f"Skipped:     {skipped}")
-        print("Not found:   0")
-        print("Errors:      0")
-        return 0
-    except Exception as e:
-        print(f"  {key}: ERROR - {e}")
-        print()
-        print("--- Done ---")
-        print("Created:     0")
-        print("Overwritten: 0")
-        print("Skipped:     0")
-        print("Not found:   0")
-        print("Errors:      1")
-        return 1
-
-
-def _fetch_children(issue: dict[str, object]) -> list[dict[str, object]] | None:
-    """Fetch child issues for Epics, skipping if subtasks already exist."""
-    if not should_fetch_children(issue):
-        return None
-    key = str(issue.get("key", "")).strip()
-    if not key:
-        return None
-    try:
-        children = fetch_children(key)
-    except Exception as e:
-        print(f"  {key}: ERROR fetching children - {e}")
-        return None
-    return children
-
-
-RESOLVED_STATUSES = {"done", "completed", "resolved", "closed", "accepted", "canceled"}
-
-NOT_SYNC_PATH = REPO_ROOT / ".local" / "jira-sync" / "result" / "tasks-not-sync.txt"
-FORCE_SYNC_PATH = REPO_ROOT / ".local" / "jira-sync" / "result" / "tasks-force-sync.txt"
-
-
-def _load_not_sync() -> set[str]:
-    """Load task keys that should never be synced."""
-    if not NOT_SYNC_PATH.is_file():
-        return set()
-    return {
-        line.strip()
-        for line in NOT_SYNC_PATH.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
-
-
-def _load_force_sync() -> set[str]:
-    """Load task keys that should always be force-overwritten."""
-    if not FORCE_SYNC_PATH.is_file():
-        return set()
-    return {
-        line.strip()
-        for line in FORCE_SYNC_PATH.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    }
-
-
-def _get_pending(download_path: str) -> None:
-    """Scan downloaded tasks for unresolved ones, write to pending-tasks.txt."""
-    tasks_dir = Path(download_path)
-    if not tasks_dir.is_dir():
-        print(f"Download path not found: {download_path}")
-        return
-
-    pending: list[str] = []
-    not_sync = _load_not_sync()
-    for task_dir in sorted(tasks_dir.iterdir()):
-        if not task_dir.is_dir():
-            continue
-        task_json = task_dir / "task.json"
-        if not task_json.is_file():
-            continue
-        try:
-            data = json.loads(task_json.read_text(encoding="utf-8"))
-        except Exception:
-            continue
-        status = (data.get("status") or "").strip().lower()
-        task_key = data.get("task_key", task_dir.name)
-        if not task_key.startswith(JIRA_PROJECT_KEY + "-"):
-            continue
-        if task_key in not_sync:
-            continue
-        if status not in RESOLVED_STATUSES:
-            pending.append(task_key)
-
-    PENDING_TASKS_PATH.parent.mkdir(parents=True, exist_ok=True)
-    PENDING_TASKS_PATH.write_text("\n".join(pending) + "\n", encoding="utf-8")
-    print(f"Wrote {len(pending)} pending tasks to tasks-pending.txt")
-
-
-def _sync_pending(
-    project_key: str,
-    force: bool,
-    download_path: str,
-    download_path_rel: str,
-    not_found_state_path: Path,
-) -> None:
-    """Re-sync all tasks in pending-tasks.txt, remove resolved ones."""
-    if not PENDING_TASKS_PATH.is_file():
-        print(f"No pending tasks file at {PENDING_TASKS_PATH}")
-        return
-
-    lines = [
-        line.strip()
-        for line in PENDING_TASKS_PATH.read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
-    if not lines:
-        print("Pending tasks list is empty.")
-        return
-
-    print(f"Syncing {len(lines)} pending tasks...")
-    print()
-
-    remaining: list[str] = []
-    not_sync = _load_not_sync()
-    for task_key in lines:
-        if not task_key.startswith(project_key + "-"):
-            print(f"  {task_key}: skip - wrong project")
-            continue
-        try:
-            project, issue_id = parse_target(task_key, project_key)
-        except ValueError as e:
-            print(f"  {task_key}: skip - {e}")
-            remaining.append(task_key)
-            continue
-
-        key = f"{project}-{issue_id}"
-        if key in not_sync:
-            print(f"  {key}: in not-sync list - skip")
-            continue
-        issue = fetch_issue(project, issue_id)
-        if issue is None:
-            print(f"  {key}: not found - keeping in list")
-            remaining.append(key)
-            continue
-
-        status = (
-            (((issue.get("fields") or {}).get("status") or {}).get("name", "") or "")
-            .strip()
-            .lower()
-        )
-
-        children = _fetch_children(issue)
-        write_raw_md(
-            issue, force=True, download_path=download_path, epic_children=children
-        )
-        _ = write_task_json(
-            issue,
-            force=True,
-            download_path=download_path,
-            download_path_rel=download_path_rel,
-            epic_children=children,
-        )
-
-        if status in RESOLVED_STATUSES:
-            print(f"  {key}: {status} - removed from pending")
-        else:
-            print(f"  {key}: {status} - keeping in pending")
-            remaining.append(key)
-
-    PENDING_TASKS_PATH.write_text("\n".join(remaining) + "\n", encoding="utf-8")
-    print()
-    print(f"Remaining pending: {len(remaining)}")
-
-
-def _range_sync_issue(
-    project_key: str,
-    issue_id: int,
-    force: bool,
-    download_path: str,
-    download_path_rel: str,
-    sync_state_path: Path,
-    not_found_state_path: Path,
-    known_not_found_ids: set[str],
-    not_sync: set[str],
-    force_sync: set[str],
-) -> tuple[str, int]:
-    """Sync one issue during range sync. Returns (result, children_count)."""
-    key = f"{project_key}-{issue_id}"
-    if key in not_sync:
-        print(f"  {key}: in not-sync list - skip")
-        save_state(sync_state_path, project_key, issue_id)
-        return ("skipped", 0)
-    if key in known_not_found_ids:
-        print(f"  {key}: known missing - skip")
-        save_state(sync_state_path, project_key, issue_id)
-        return ("not_found", 0)
-
-    effective_force = force or key in force_sync
-    issue = fetch_issue(project_key, issue_id)
-    if issue is None:
-        add_not_found_id(not_found_state_path, project_key, issue_id)
-        print(f"  {key}: not found")
-        save_state(sync_state_path, project_key, issue_id)
-        return ("not_found", 0)
-
-    children = _fetch_children(issue)
-    clen = len(children) if children else 0
-    result = write_raw_md(
-        issue,
-        force=effective_force,
-        download_path=download_path,
-        epic_children=children,
-    )
-    _ = write_task_json(
-        issue,
-        force=effective_force,
-        download_path=download_path,
-        download_path_rel=download_path_rel,
-        epic_children=children,
-    )
-    save_state(sync_state_path, project_key, issue_id)
-    suffix = f" ({clen} children)" if children else ""
-    print(f"  {key}: {result}{suffix}")
-    return (result, clen)
 
 
 def main() -> None:
@@ -387,29 +106,31 @@ def main() -> None:
     force = bool(args.force)
     target = cast(str | None, args.target)
     start_override = cast(int | None, args.start)
-    discover = bool(args.discover)
-    discover_all = bool(args.discover_all)
-    get_pending = bool(args.get_pending)
-    do_pending = bool(args.pending)
 
-    if discover or discover_all:
-        discover_fields(show_all=discover_all)
+    # -- discover --
+    if bool(args.discover) or bool(args.discover_all):
+        discover_fields(show_all=bool(args.discover_all))
         sys.exit(0)
 
-    if get_pending:
-        _get_pending(download_path)
+    lists = TaskListManager()
+
+    # -- get-pending --
+    if bool(args.get_pending):
+        lists.build_pending(download_path)
         sys.exit(0)
 
-    if do_pending:
-        _sync_pending(
+    # -- pending re-sync --
+    if bool(args.pending):
+        _sync_pending_tasks(
+            lists,
             default_project_key,
-            True,
             download_path,
             download_path_rel,
             not_found_state_path,
         )
         sys.exit(0)
 
+    # -- single task --
     if target is not None and start_override is None:
         try:
             project_key, issue_id = parse_target(target, default_project_key)
@@ -427,11 +148,10 @@ def main() -> None:
             )
         )
 
+    # -- range sync --
     project_key = default_project_key
     state = load_state(sync_state_path, project_key)
     known_not_found_ids = load_not_found_ids(not_found_state_path, project_key)
-    not_sync = _load_not_sync()
-    force_sync = _load_force_sync()
     start_id = (
         start_override
         if start_override is not None
@@ -460,7 +180,7 @@ def main() -> None:
 
     for issue_id in range(start_id, max_id + 1):
         try:
-            result, _clen = _range_sync_issue(
+            result, _clen = range_sync_issue(
                 project_key,
                 issue_id,
                 force,
@@ -469,8 +189,8 @@ def main() -> None:
                 sync_state_path,
                 not_found_state_path,
                 known_not_found_ids,
-                not_sync,
-                force_sync,
+                lists.not_sync,
+                lists.force_sync,
             )
             if result == "skipped":
                 skipped += 1
@@ -493,6 +213,74 @@ def main() -> None:
     print(f"Not found:   {not_found}")
     print(f"Errors:      {errors}")
     print(f"MaxDownloadedId saved: {last_successful_id}")
+
+
+def _sync_pending_tasks(
+    lists: TaskListManager,
+    project_key: str,
+    download_path: str,
+    download_path_rel: str,
+    not_found_state_path: Path,
+) -> None:
+    """Re-sync all tasks in tasks-pending.txt, remove resolved ones."""
+    lines = lists.load_pending()
+    if not lines:
+        print("Pending tasks list is empty.")
+        return
+
+    print(f"Syncing {len(lines)} pending tasks...")
+    print()
+
+    remaining: list[str] = []
+    for task_key in lines:
+        if not task_key.startswith(project_key + "-"):
+            print(f"  {task_key}: skip - wrong project")
+            continue
+        if task_key in lists.not_sync:
+            print(f"  {task_key}: in not-sync list - skip")
+            continue
+
+        try:
+            project, issue_id = parse_target(task_key, project_key)
+        except ValueError as e:
+            print(f"  {task_key}: skip - {e}")
+            remaining.append(task_key)
+            continue
+
+        key = f"{project}-{issue_id}"
+        issue = fetch_issue(project, issue_id)
+        if issue is None:
+            print(f"  {key}: not found - keeping in list")
+            remaining.append(key)
+            continue
+
+        status = (
+            (((issue.get("fields") or {}).get("status") or {}).get("name", "") or "")
+            .strip()
+            .lower()
+        )
+
+        children = _fetch_children_if_epic(issue)
+        write_raw_md(
+            issue, force=True, download_path=download_path, epic_children=children
+        )
+        _ = write_task_json(
+            issue,
+            force=True,
+            download_path=download_path,
+            download_path_rel=download_path_rel,
+            epic_children=children,
+        )
+
+        if status in RESOLVED_STATUSES:
+            print(f"  {key}: {status} - removed from pending")
+        else:
+            print(f"  {key}: {status} - keeping in pending")
+            remaining.append(key)
+
+    lists.save_pending(remaining)
+    print()
+    print(f"Remaining pending: {len(remaining)}")
 
 
 if __name__ == "__main__":

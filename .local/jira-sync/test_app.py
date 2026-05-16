@@ -250,7 +250,7 @@ class MainTests(unittest.TestCase):
                     ["main.py", "--config", str(config_path), "--start", "1"],
                 ),
                 patch("main.get_max_issue_id", return_value=3),
-                patch("main.fetch_issue") as fetch_issue_mock,
+                patch("sync_runner.fetch_issue") as fetch_issue_mock,
                 patch("main.load_not_found_ids", return_value={"APP-3"}),
                 redirect_stdout(stdout),
             ):
