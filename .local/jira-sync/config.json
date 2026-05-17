@@ -11,5 +11,7 @@
     "sprint": "customfield_10006",
     "tags": "customfield_13351"
   },
-  "pending_tasks_path": ".local/jira-sync/result/tasks-pending.txt"
+  "pending_tasks_path": ".local/jira-sync/result/tasks-pending.txt",
+  "pr_template_path": ".local/jira-sync/templates/pr-template.md",
+  "github_repo": "saritasa-nest/rma-mobile"
 }

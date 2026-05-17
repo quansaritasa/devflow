@@ -16,6 +16,7 @@ from config import (
 )
 from fetcher import discover_fields, fetch_issue, get_max_issue_id
 from persistence import write_raw_md, write_task_json
+from github_pr import fetch_and_write_pr
 from sync_runner import _fetch_children_if_epic, range_sync_issue, sync_one_issue
 from sync_state import add_not_found_id, load_not_found_ids, load_state
 from task_lists import RESOLVED_STATUSES, TaskListManager
@@ -90,6 +91,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Re-sync all tasks in tasks-pending.txt, remove resolved ones.",
     )
+    _ = parser.add_argument(
+        "--with-prs",
+        action="store_true",
+        help="Also fetch GitHub PR data for each synced task.",
+    )
     return parser.parse_args()
 
 
@@ -137,6 +143,7 @@ def main() -> None:
         except ValueError as e:
             print(f"ERROR: {e}")
             sys.exit(2)
+        with_prs = bool(args.with_prs)
         sys.exit(
             sync_one_issue(
                 project_key,
@@ -145,6 +152,7 @@ def main() -> None:
                 download_path,
                 download_path_rel,
                 not_found_state_path,
+                with_prs=with_prs,
             )
         )
 

@@ -23,6 +23,8 @@ class AppConfig:
     template_paths: list[Path]
     custom_fields: dict[str, str]
     pending_tasks_path: Path
+    pr_template_path: Path
+    github_repo: str
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -57,6 +59,8 @@ def load_app_config(config_path: Path = CONFIG_PATH) -> AppConfig:
     if not isinstance(template_paths_raw, list):
         raise ValueError("Config value 'template_paths' must be a list")
 
+    github_repo_from_config = str(raw.get("github_repo", "")).strip()
+
     return AppConfig(
         download_path=_resolve_repo_path(
             str(raw.get("download_path", "")), "download_path"
@@ -84,6 +88,10 @@ def load_app_config(config_path: Path = CONFIG_PATH) -> AppConfig:
             ),
             "pending_tasks_path",
         ),
+        pr_template_path=_resolve_repo_path(
+            str(raw.get("pr_template_path", "")), "pr_template_path"
+        ),
+        github_repo=github_repo_from_config,
     )
 
 
@@ -113,9 +121,12 @@ SYNC_STATE_PATH = APP_CONFIG.sync_state_path
 NOT_FOUND_STATE_PATH = APP_CONFIG.not_found_state_path
 TEMPLATE_PATHS = APP_CONFIG.template_paths
 PENDING_TASKS_PATH = APP_CONFIG.pending_tasks_path
+PR_TEMPLATE_PATH = APP_CONFIG.pr_template_path
 STORY_POINTS_FIELD = APP_CONFIG.custom_fields.get("story_points", "")
 SPRINT_FIELD = APP_CONFIG.custom_fields.get("sprint", "")
 TAGS_FIELD = APP_CONFIG.custom_fields.get("tags", "")
+
+GITHUB_REPO = os.getenv("GITHUB_REPO", "") or APP_CONFIG.github_repo
 
 JIRA_FIELDS = [
     "summary",
