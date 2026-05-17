@@ -1,0 +1,17 @@
+{
+  "download_path": "dev/tasks",
+  "sync_state_path": ".local/jira-sync/sync-state.json",
+  "not_found_state_path": ".local/jira-sync/result/tasks-not-found.txt",
+  "template_paths": [
+    ".local/jira-sync/templates/raw-template.md",
+    "dev/templates/raw-template.md"
+  ],
+  "custom_fields": {
+    "story_points": "customfield_12722",
+    "sprint": "customfield_10006",
+    "tags": "customfield_13351"
+  },
+  "pending_tasks_path": ".local/jira-sync/result/tasks-pending.txt",
+  "pr_template_path": ".local/jira-sync/templates/pr-template.md",
+  "github_repo": "saritasa-nest/rma-mobile"
+}

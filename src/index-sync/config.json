@@ -1,0 +1,6 @@
+{
+  "tasks_dir": "dev/tasks",
+  "index_dir": "dev/index",
+  "shard_size": 1000,
+  "task_key_pattern": "^[A-Z][A-Z0-9]+-\\d+$"
+}
