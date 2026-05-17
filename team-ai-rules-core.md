@@ -1,12 +1,10 @@
----
-Used by Cursor, JetBrains AI Assistant, GitHub Copilot, Copilot Chat, Codeium, Windsurf, and similar AI coding tools.
-Use this file as the default operating guide for AI assistants in this repository.
-Explicit task instructions override these rules unless they conflict with a hard stop.
----
-
-> If `.ai/startup.md` exists, read it before starting work.
-
 # AI RULES
+
+Used by: Cursor, JetBrains AI Assistant, GitHub Copilot / Copilot Chat, Codeium, Windsurf, and other AI coding tools that can read this file.
+
+Use this file as the default operating guide for AI coding assistants in this repository.
+
+Explicit task instructions override these rules unless they conflict with a hard stop.
 
 ---
 
